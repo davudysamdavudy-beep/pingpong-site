@@ -383,24 +383,79 @@ def home():
 @app.route("/create", methods=["POST"])
 def create():
 
-    raw = request.form.get("players","")
+    raw = request.form.get("players", "")
     players = [p.strip() for p in raw.split("\n") if p.strip()]
 
     if len(players) == 0:
-        return render_template_string(HOME_HTML, error="حداقل یک اسم وارد کن")
+        return render_template_string(
+            HOME_HTML,
+            error="حداقل یک اسم وارد کن"
+        )
 
     if len(players) % 3 != 0:
         need = 3 - (len(players) % 3)
-        return render_template_string(HOME_HTML, error=f"{need} نفر دیگر لازم است")
+        return render_template_string(
+            HOME_HTML,
+            error=f"{need} نفر دیگر لازم است"
+        )
+
+    group_count = len(players) // 3
+
+    # شمارش اسامی تکراری
+    counts = {}
+    for name in players:
+        counts[name] = counts.get(name, 0) + 1
+
+    # اگر تعداد یک اسم از تعداد گروه‌ها بیشتر باشد
+    for name, count in counts.items():
+        if count > group_count:
+            return render_template_string(
+                HOME_HTML,
+                error=f"تعداد '{name}' از تعداد گروه‌ها بیشتر است"
+            )
 
     random.shuffle(players)
+
+    groups_raw = [[] for _ in range(group_count)]
+
+    # افراد با تکرار بیشتر اول پخش می‌شوند
+    ordered_players = sorted(
+        players,
+        key=lambda x: counts[x],
+        reverse=True
+    )
+
+    for player in ordered_players:
+
+        placed = False
+
+        indexes = list(range(group_count))
+        random.shuffle(indexes)
+
+        # اول تلاش می‌کنیم در گروهی بدون اسم مشابه قرار بگیرد
+        for idx in indexes:
+
+            if len(groups_raw[idx]) >= 3:
+                continue
+
+            names = groups_raw[idx]
+
+            if player not in names:
+                groups_raw[idx].append(player)
+                placed = True
+                break
+
+        # اگر نشد، در اولین گروه خالی قرار بگیرد
+        if not placed:
+            for idx in indexes:
+                if len(groups_raw[idx]) < 3:
+                    groups_raw[idx].append(player)
+                    break
 
     groups = []
     matches = []
 
-    for i in range(0, len(players), 3):
-
-        chunk = players[i:i+3]
+    for chunk in groups_raw:
 
         group = [
             make(chunk[0]),
@@ -411,15 +466,19 @@ def create():
         groups.append(group)
 
         matches.append([
-            {"p1":group[0],"p2":group[1]},
-            {"p1":group[0],"p2":group[2]},
-            {"p1":group[1],"p2":group[2]},
+            {"p1": group[0], "p2": group[1]},
+            {"p1": group[0], "p2": group[2]},
+            {"p1": group[1], "p2": group[2]},
         ])
 
     tournament["groups"] = groups
     tournament["matches"] = matches
 
-    return render_template_string(GROUP_HTML, groups=groups, matches=matches)
+    return render_template_string(
+        GROUP_HTML,
+        groups=groups,
+        matches=matches
+    )
 
 
 @app.route("/save", methods=["POST"])
