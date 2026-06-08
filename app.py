@@ -249,7 +249,7 @@ cursor:pointer;
 <div class="group-title">گروه {{ loop.index }}</div>
 
 {% for p in g %}
-<div class="player">👤 {{ p["name"] }}</div>
+<div class="player">👤 {{ p["name"] }} | سطح {{ p["level"] }}</div>
 {% endfor %}
 
 {% for m in matches[gid] %}
@@ -362,9 +362,10 @@ border-radius:15px;
 
 # ================= LOGIC =================
 
-def make(name):
+def make(name, level):
     return {
         "name": name,
+        "level": level,
         "win": 0,
         "sf": 0,
         "sa": 0
@@ -384,7 +385,28 @@ def home():
 def create():
 
     raw = request.form.get("players", "")
-    players = [p.strip() for p in raw.split("\n") if p.strip()]
+
+    players = []
+
+    for line in raw.split("\n"):
+        line = line.strip()
+
+        if not line:
+            continue
+
+        try:
+            name, level = line.split(",")
+            level = int(level.strip())
+        except:
+            return render_template_string(
+                HOME_HTML,
+                error="فرمت ورودی باید مثل: علی,1"
+            )
+
+        players.append({
+            "name": name.strip(),
+            "level": level
+        })
 
     if len(players) == 0:
         return render_template_string(
@@ -392,65 +414,30 @@ def create():
             error="حداقل یک اسم وارد کن"
         )
 
-    if len(players) % 3 != 0:
-        need = 3 - (len(players) % 3)
+    strong = [p for p in players if p["level"] == 1]
+    medium = [p for p in players if p["level"] == 2]
+    weak = [p for p in players if p["level"] == 3]
+
+    if not (len(strong) == len(medium) == len(weak)):
         return render_template_string(
             HOME_HTML,
-            error=f"{need} نفر دیگر لازم است"
+            error="تعداد سطح 1 و 2 و 3 باید برابر باشد"
         )
 
-    group_count = len(players) // 3
+    group_count = len(strong)
 
-    # شمارش اسامی تکراری
-    counts = {}
-    for name in players:
-        counts[name] = counts.get(name, 0) + 1
+    random.shuffle(strong)
+    random.shuffle(medium)
+    random.shuffle(weak)
 
-    # اگر تعداد یک اسم از تعداد گروه‌ها بیشتر باشد
-    for name, count in counts.items():
-        if count > group_count:
-            return render_template_string(
-                HOME_HTML,
-                error=f"تعداد '{name}' از تعداد گروه‌ها بیشتر است"
-            )
+    groups_raw = []
 
-    random.shuffle(players)
-
-    groups_raw = [[] for _ in range(group_count)]
-
-    # افراد با تکرار بیشتر اول پخش می‌شوند
-    ordered_players = sorted(
-        players,
-        key=lambda x: counts[x],
-        reverse=True
-    )
-
-    for player in ordered_players:
-
-        placed = False
-
-        indexes = list(range(group_count))
-        random.shuffle(indexes)
-
-        # اول تلاش می‌کنیم در گروهی بدون اسم مشابه قرار بگیرد
-        for idx in indexes:
-
-            if len(groups_raw[idx]) >= 3:
-                continue
-
-            names = groups_raw[idx]
-
-            if player not in names:
-                groups_raw[idx].append(player)
-                placed = True
-                break
-
-        # اگر نشد، در اولین گروه خالی قرار بگیرد
-        if not placed:
-            for idx in indexes:
-                if len(groups_raw[idx]) < 3:
-                    groups_raw[idx].append(player)
-                    break
+    for i in range(group_count):
+        groups_raw.append([
+            strong[i],
+            medium[i],
+            weak[i]
+        ])
 
     groups = []
     matches = []
@@ -458,9 +445,9 @@ def create():
     for chunk in groups_raw:
 
         group = [
-            make(chunk[0]),
-            make(chunk[1]),
-            make(chunk[2])
+            make(chunk[0]["name"], chunk[0]["level"]),
+            make(chunk[1]["name"], chunk[1]["level"]),
+            make(chunk[2]["name"], chunk[2]["level"])
         ]
 
         groups.append(group)
